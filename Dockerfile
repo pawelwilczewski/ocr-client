@@ -12,7 +12,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     curl \
-    git \
     ninja-build \
     && rm -rf /var/lib/apt/lists/*
 
