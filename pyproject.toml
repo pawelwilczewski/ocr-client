@@ -1,8 +1,15 @@
 [project]
 name = "ocr-client"
 version = "0.1.0"
-requires-python = ">=3.13,<3.14"
-dependencies = []
+requires-python = ">=3.12"
+dependencies = [
+    "addict",
+    "easydict",
+    "einops",
+    "tokenizers",
+    "torch",
+    "transformers",
+]
 
 [project.scripts]
 ocr-client = "ocr_client.cli:main"
@@ -12,6 +19,17 @@ requires = ["uv_build>=0.10.2,<0.11.0"]
 build-backend = "uv_build"
 
 [dependency-groups]
-dev = [
-    "pyrefly>=0.52.0",
-]
+dev = ["pyrefly>=0.52.0"]
+
+[tool.uv.extra-build-dependencies]
+flash-attn = ["psutil"]
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu130" }
+torchvision = { index = "pytorch-cu130" }
+torchaudio = { index = "pytorch-cu130" }
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
