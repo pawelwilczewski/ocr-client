@@ -104,3 +104,27 @@ uv run ocr-client ./your-image.png --cpu
 ## Current limitations
 
 - If CUDA or `flash-attn` is unavailable, execution fails fast with diagnostics.
+
+## Docker
+
+Build image:
+
+```bash
+docker build -t ocr-client:latest .
+```
+
+Run on GPU (mount current directory as `/work`):
+
+```bash
+docker run --rm --gpus all \
+  -v "$PWD:/work" \
+  ocr-client:latest /work/chapter.pdf --output-dir /work/ocr_output
+```
+
+Run with cleanup flag:
+
+```bash
+docker run --rm --gpus all \
+  -v "$PWD:/work" \
+  ocr-client:latest /work/chapter.pdf --output-dir /work/ocr_output --cleanup-temp-images
+```

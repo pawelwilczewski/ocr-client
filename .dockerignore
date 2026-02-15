@@ -1,0 +1,17 @@
+.git
+.venv
+.uv-cache
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+
+ocr_output
+tests/output
+
+chapter.pdf
+easy-example.jpg
+out.mmd
+
+docs
+tests
