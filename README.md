@@ -1,6 +1,6 @@
 ## ocr-client
 
-Image OCR CLI using DeepSeek-OCR-2 (PDF support is intentionally deferred to a later chunk).
+Image/PDF OCR CLI using DeepSeek-OCR-2 with `.mmd` output and preserved OCR images.
 
 ## Fresh Setup (WSL Ubuntu)
 
@@ -58,7 +58,7 @@ Note:
 ## Run
 
 ```bash
-uv run ocr-client ./your-image.png
+uv run ocr-client ./your-image.png --output-dir ./ocr_output
 ```
 
 Optional CUDA checks:
@@ -72,7 +72,6 @@ Optional arguments:
 
 ```bash
 uv run ocr-client ./your-image.png \
-  --output-mmd ./your-image.mmd \
   --output-dir ./ocr_output \
   --device cuda:0 \
   --base-size 1024 \
@@ -83,15 +82,18 @@ uv run ocr-client ./your-image.png \
 PDF examples:
 
 ```bash
-uv run ocr-client ./chapter.pdf --output-mmd ./chapter.mmd
+uv run ocr-client ./chapter.pdf --output-dir ./ocr_output
 uv run ocr-client ./chapter.pdf --output-dir ./ocr_output --cleanup-temp-images
 ```
 
 Notes for PDF:
 
 - PDF input is internally rendered page-by-page to images via `pypdfium2`.
-- OCR appends page blocks to one output file with `## Page N` headings.
+- OCR appends page blocks live to one output file with `## Page N` headings.
 - If one page fails OCR, processing continues and inserts a failure marker for that page.
+- OCR images are normalized and preserved under `output-dir/images` with globally offset names.
+- Final output is always `output-dir/result.mmd`.
+- Existing `output-dir/result.mmd` is overwritten at run start and rebuilt incrementally.
 
 CPU mode must be explicit:
 

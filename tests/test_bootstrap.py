@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
@@ -32,39 +33,57 @@ class BootstrapTests(unittest.TestCase):
     def test_parser_accepts_expected_flags(self) -> None:
         parser = build_parser()
         args = parser.parse_args(
-            ["tests/fixtures/sample.png", "--device", "cuda:0", "--no-crop-mode", "--cleanup-temp-images"]
+            [
+                "tests/fixtures/sample.png",
+                "--output-dir",
+                "tests/output",
+                "--device",
+                "cuda:0",
+                "--no-crop-mode",
+                "--cleanup-temp-images",
+            ]
         )
         self.assertEqual(args.input_path, "tests/fixtures/sample.png")
+        self.assertEqual(args.output_dir, "tests/output")
         self.assertEqual(args.device, "cuda:0")
         self.assertFalse(args.crop_mode)
         self.assertTrue(args.cleanup_temp_images)
 
-    @patch("pathlib.Path.write_text")
-    @patch("ocr_client.pipeline.infer_image", return_value="markdown body")
+    @patch("ocr_client.pipeline.infer_image")
     @patch("ocr_client.pipeline.load_model")
-    def test_pipeline_image_writes_default_mmd(
+    def test_pipeline_image_writes_default_mmd_and_preserves_images(
         self,
         mock_load_model: MagicMock,
-        _mock_infer: MagicMock,
-        mock_write_text: MagicMock,
+        mock_infer: MagicMock,
     ) -> None:
         mock_load_model.return_value = MagicMock()
-        image_path = Path("tests/fixtures/sample.png")
-        output_path = Path("tests/output/sample-output.mmd")
 
-        result = run_pipeline(
-            input_path=image_path,
-            output_mmd=output_path,
-            model_name="deepseek-ai/DeepSeek-OCR-2",
-            prompt="<image>\n<|grounding|>Convert the document to markdown. ",
-            device="cuda:0",
-        )
+        def infer_side_effect(*args: object, **kwargs: object) -> str:
+            output_path = kwargs["output_path"]
+            assert isinstance(output_path, Path)
+            (output_path / "images").mkdir(parents=True, exist_ok=True)
+            (output_path / "images" / "0.jpg").write_bytes(b"test")
+            (output_path / "result.mmd").write_text("hello\n\n![](images/0.jpg)\n", encoding="utf-8")
+            return "ignored"
 
-        self.assertEqual(result.mode, "image")
-        self.assertEqual(result.output_mmd, output_path)
-        mock_write_text.assert_called_once()
+        mock_infer.side_effect = infer_side_effect
 
-    @patch("pathlib.Path.write_text")
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            result = run_pipeline(
+                input_path=Path("tests/fixtures/sample.png"),
+                output_dir=output_dir,
+                model_name="deepseek-ai/DeepSeek-OCR-2",
+                prompt="<image>\n<|grounding|>Convert the document to markdown. ",
+                device="cuda:0",
+            )
+
+            self.assertEqual(result.mode, "image")
+            self.assertEqual(result.output_mmd, output_dir / "result.mmd")
+            self.assertTrue((output_dir / "images" / "0.jpg").exists())
+            out_text = (output_dir / "result.mmd").read_text(encoding="utf-8")
+            self.assertIn("![](images/0.jpg)", out_text)
+
     @patch("ocr_client.pipeline.infer_image")
     @patch("ocr_client.pipeline._render_pdf_pages")
     @patch("ocr_client.pipeline.load_model")
@@ -73,7 +92,6 @@ class BootstrapTests(unittest.TestCase):
         mock_load_model: MagicMock,
         mock_render_pdf_pages: MagicMock,
         mock_infer_image: MagicMock,
-        mock_write_text: MagicMock,
     ) -> None:
         mock_load_model.return_value = MagicMock()
         mock_render_pdf_pages.return_value = [
@@ -83,24 +101,75 @@ class BootstrapTests(unittest.TestCase):
         ]
         mock_infer_image.side_effect = ["first", "second", "third"]
 
-        result = run_pipeline(
-            input_path=Path("tests/fixtures/sample.pdf"),
-            model_name="deepseek-ai/DeepSeek-OCR-2",
-            prompt="<image>\n<|grounding|>Convert the document to markdown. ",
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            result = run_pipeline(
+                input_path=Path("tests/fixtures/sample.pdf"),
+                output_dir=output_dir,
+                model_name="deepseek-ai/DeepSeek-OCR-2",
+                prompt="<image>\n<|grounding|>Convert the document to markdown. ",
+            )
 
-        self.assertEqual(result.mode, "pdf")
-        self.assertEqual(result.output_mmd, Path("tests/fixtures/sample.mmd"))
-        self.assertIn("Pages=3, failed=0", result.message)
+            self.assertEqual(result.mode, "pdf")
+            self.assertEqual(result.output_mmd, output_dir / "result.mmd")
+            self.assertIn("Pages=3, failed=0", result.message)
 
-        written_text = mock_write_text.call_args.args[0]
-        self.assertIn("## Page 1", written_text)
-        self.assertIn("## Page 2", written_text)
-        self.assertIn("## Page 3", written_text)
-        self.assertLess(written_text.index("## Page 1"), written_text.index("## Page 2"))
-        self.assertLess(written_text.index("## Page 2"), written_text.index("## Page 3"))
+            written_text = (output_dir / "result.mmd").read_text(encoding="utf-8")
+            self.assertIn("## Page 1", written_text)
+            self.assertIn("## Page 2", written_text)
+            self.assertIn("## Page 3", written_text)
+            self.assertLess(written_text.index("## Page 1"), written_text.index("## Page 2"))
+            self.assertLess(written_text.index("## Page 2"), written_text.index("## Page 3"))
 
-    @patch("pathlib.Path.write_text")
+    @patch("ocr_client.pipeline.infer_image")
+    @patch("ocr_client.pipeline._render_pdf_pages")
+    @patch("ocr_client.pipeline.load_model")
+    def test_pipeline_pdf_rewrites_and_offsets_image_refs(
+        self,
+        mock_load_model: MagicMock,
+        mock_render_pdf_pages: MagicMock,
+        mock_infer_image: MagicMock,
+    ) -> None:
+        mock_load_model.return_value = MagicMock()
+        mock_render_pdf_pages.return_value = [Path("page1.png"), Path("page2.png")]
+        call_count = {"value": 0}
+
+        def infer_side_effect(*args: object, **kwargs: object) -> str:
+            output_path = kwargs["output_path"]
+            assert isinstance(output_path, Path)
+            call_count["value"] += 1
+            (output_path / "images").mkdir(parents=True, exist_ok=True)
+            if call_count["value"] == 1:
+                (output_path / "images" / "0.jpg").write_bytes(b"0")
+                (output_path / "images" / "1.jpg").write_bytes(b"1")
+                (output_path / "result.mmd").write_text(
+                    "P1\n\n![](images/0.jpg)\n![](images/1.jpg)\n",
+                    encoding="utf-8",
+                )
+            else:
+                (output_path / "images" / "0.jpg").write_bytes(b"2")
+                (output_path / "result.mmd").write_text("P2\n\n![](images/0.jpg)\n", encoding="utf-8")
+            return "ignored"
+
+        mock_infer_image.side_effect = infer_side_effect
+
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            run_pipeline(
+                input_path=Path("tests/fixtures/sample.pdf"),
+                output_dir=output_dir,
+                model_name="deepseek-ai/DeepSeek-OCR-2",
+                prompt="<image>\n<|grounding|>Convert the document to markdown. ",
+            )
+
+            written_text = (output_dir / "result.mmd").read_text(encoding="utf-8")
+            self.assertIn("![](images/0.jpg)", written_text)
+            self.assertIn("![](images/1.jpg)", written_text)
+            self.assertIn("![](images/2.jpg)", written_text)
+            self.assertTrue((output_dir / "images" / "0.jpg").exists())
+            self.assertTrue((output_dir / "images" / "1.jpg").exists())
+            self.assertTrue((output_dir / "images" / "2.jpg").exists())
+
     @patch("ocr_client.pipeline.infer_image")
     @patch("ocr_client.pipeline._render_pdf_pages")
     @patch("ocr_client.pipeline.load_model")
@@ -109,7 +178,6 @@ class BootstrapTests(unittest.TestCase):
         mock_load_model: MagicMock,
         mock_render_pdf_pages: MagicMock,
         mock_infer_image: MagicMock,
-        mock_write_text: MagicMock,
     ) -> None:
         mock_load_model.return_value = MagicMock()
         mock_render_pdf_pages.return_value = [
@@ -119,21 +187,23 @@ class BootstrapTests(unittest.TestCase):
         ]
         mock_infer_image.side_effect = ["first", RuntimeError("boom"), "third"]
 
-        result = run_pipeline(
-            input_path=Path("tests/fixtures/sample.pdf"),
-            model_name="deepseek-ai/DeepSeek-OCR-2",
-            prompt="<image>\n<|grounding|>Convert the document to markdown. ",
-        )
+        with tempfile.TemporaryDirectory() as tmp:
+            output_dir = Path(tmp)
+            result = run_pipeline(
+                input_path=Path("tests/fixtures/sample.pdf"),
+                output_dir=output_dir,
+                model_name="deepseek-ai/DeepSeek-OCR-2",
+                prompt="<image>\n<|grounding|>Convert the document to markdown. ",
+            )
 
-        self.assertEqual(result.mode, "pdf")
-        self.assertIn("failed=1", result.message)
-        written_text = mock_write_text.call_args.args[0]
-        self.assertIn("## Page 2", written_text)
-        self.assertIn("[OCR FAILED: RuntimeError: boom]", written_text)
-        self.assertIn("## Page 3", written_text)
+            self.assertEqual(result.mode, "pdf")
+            self.assertIn("failed=1", result.message)
+            written_text = (output_dir / "result.mmd").read_text(encoding="utf-8")
+            self.assertIn("## Page 2", written_text)
+            self.assertIn("[OCR FAILED: RuntimeError: boom]", written_text)
+            self.assertIn("## Page 3", written_text)
 
     @patch("ocr_client.pipeline.shutil.rmtree")
-    @patch("pathlib.Path.write_text")
     @patch("ocr_client.pipeline.infer_image", return_value="only-page")
     @patch("ocr_client.pipeline._render_pdf_pages", return_value=[Path("ocr_output/pages/page-0001.png")])
     @patch("ocr_client.pipeline.load_model")
@@ -142,25 +212,36 @@ class BootstrapTests(unittest.TestCase):
         mock_load_model: MagicMock,
         _mock_render: MagicMock,
         _mock_infer: MagicMock,
-        _mock_write: MagicMock,
         mock_rmtree: MagicMock,
     ) -> None:
         mock_load_model.return_value = MagicMock()
 
         run_pipeline(
             input_path=Path("tests/fixtures/sample.pdf"),
+            output_dir=Path("tests/output"),
             model_name="deepseek-ai/DeepSeek-OCR-2",
             prompt="<image>\n<|grounding|>Convert the document to markdown. ",
             cleanup_temp_images=True,
         )
 
-        mock_rmtree.assert_called_once()
+        called_dirs = [call.args[0] for call in mock_rmtree.call_args_list]
+        self.assertIn(Path("tests/output") / "pages", called_dirs)
 
     @patch("ocr_client.pipeline._render_pdf_pages", side_effect=ValueError("bad pdf"))
     def test_pipeline_pdf_unreadable_raises(self, _mock_render: MagicMock) -> None:
         with self.assertRaises(ValueError):
             run_pipeline(
                 input_path=Path("tests/fixtures/sample.pdf"),
+                output_dir=Path("tests/output"),
+                model_name="deepseek-ai/DeepSeek-OCR-2",
+                prompt="<image>\n<|grounding|>Convert the document to markdown. ",
+            )
+
+    def test_pipeline_requires_output_dir(self) -> None:
+        with self.assertRaises(ValueError):
+            run_pipeline(
+                input_path=Path("tests/fixtures/sample.pdf"),
+                output_dir=None,
                 model_name="deepseek-ai/DeepSeek-OCR-2",
                 prompt="<image>\n<|grounding|>Convert the document to markdown. ",
             )

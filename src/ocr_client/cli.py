@@ -11,9 +11,9 @@ from ocr_client.pipeline import run_pipeline
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ocr-client")
     parser.add_argument("input_path", help="Path to a PDF or image file.")
-    parser.add_argument("--output-mmd", help="Path for generated Mermaid Markdown output.")
     parser.add_argument(
         "--output-dir",
+        required=True,
         help="Directory where model-side OCR artifacts are saved.",
     )
     parser.add_argument("--model-name", default=DEFAULT_MODEL_NAME)
@@ -41,13 +41,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     input_path = Path(args.input_path)
-    output_mmd = Path(args.output_mmd) if args.output_mmd else None
     output_dir = Path(args.output_dir) if args.output_dir else None
 
     try:
         result = run_pipeline(
             input_path=input_path,
-            output_mmd=output_mmd,
             output_dir=output_dir,
             model_name=args.model_name,
             prompt=args.prompt,
@@ -58,7 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             crop_mode=args.crop_mode,
             cleanup_temp_images=args.cleanup_temp_images,
         )
-    except (FileNotFoundError, ValueError, NotImplementedError, RuntimeError) as exc:
+    except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
     except Exception as exc:  # pragma: no cover - defensive CLI boundary

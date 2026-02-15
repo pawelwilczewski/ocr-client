@@ -39,8 +39,8 @@ Implemented as structured functions in `src/ocr_client/model.py`.
 ## Behavior
 
 1. `ocr-client <image>` writes `.mmd` file by default at `<input_stem>.mmd`.
-2. `--output-mmd` overrides output path.
-3. `--output-dir` controls model artifact output directory.
+2. Final output path is fixed to `output-dir/result.mmd`.
+3. `--output-dir` is required for both image and PDF runs.
 4. GPU is default (`--device cuda:0`).
 5. CPU mode is opt-in only via `--cpu`.
 6. Strict `_attn_implementation="flash_attention_2"` is enforced.
@@ -49,9 +49,10 @@ Implemented as structured functions in `src/ocr_client/model.py`.
 
 1. Input PDF pages are rendered to images with `pypdfium2`.
 2. Each page is OCR'd using the existing image inference path.
-3. Output is a single `.mmd` file with page sections:
+3. Output is a single `.mmd` file written incrementally with page sections:
    - `## Page 1`, `## Page 2`, ...
 4. If one page fails OCR:
    - processing continues
    - output includes `[OCR FAILED: <error>]` for that page
-5. CLI flag `--cleanup-temp-images` removes rendered page images after completion.
+5. OCR images are copied and normalized into `output-dir/images` with globally offset names.
+6. CLI flag `--cleanup-temp-images` removes rendered page images after completion.
