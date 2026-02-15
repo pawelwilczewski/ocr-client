@@ -50,6 +50,14 @@ def _extract_markdown(result: Any) -> str:
     raise ValueError(f"Unexpected infer result type: {type(result).__name__}")
 
 
+def _read_result_mmd(output_path: Path) -> str | None:
+    mmd_path = output_path / "result.mmd"
+    if not mmd_path.exists():
+        return None
+    text = mmd_path.read_text(encoding="utf-8").strip()
+    return text if text else None
+
+
 def load_model(
     model_name: str = DEFAULT_MODEL_NAME,
     device: str = "cuda:0",
@@ -74,6 +82,7 @@ def load_model(
             _attn_implementation="flash_attention_2",
             trust_remote_code=True,
             use_safetensors=True,
+            torch_dtype=None if cpu else torch.bfloat16,
         )
     except Exception as exc:  # pragma: no cover - external backend setup dependent
         cuda_state = torch.cuda.is_available()
@@ -111,4 +120,11 @@ def infer_image(
         crop_mode=crop_mode,
         save_results=True,
     )
-    return _extract_markdown(result)
+    try:
+        return _extract_markdown(result)
+    except ValueError:
+        # DeepSeek OCR may emit markdown only to output_path/result.mmd.
+        fallback = _read_result_mmd(output_path)
+        if fallback is not None:
+            return fallback
+        raise

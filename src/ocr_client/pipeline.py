@@ -25,7 +25,7 @@ IMAGE_SUFFIXES = {
 class PipelineResult:
     status: Literal["ok"]
     mode: InputKind
-    output_markdown: Path
+    output_mmd: Path
     message: str
 
 
@@ -52,7 +52,7 @@ def process_pdf(_input_path: Path) -> PipelineResult:
 def process_image(
     input_path: Path,
     *,
-    output_md: Path | None,
+    output_mmd: Path | None,
     output_dir: Path,
     model_name: str,
     prompt: str,
@@ -63,7 +63,10 @@ def process_image(
     crop_mode: bool,
 ) -> PipelineResult:
     output_dir.mkdir(parents=True, exist_ok=True)
-    output_path = output_md if output_md is not None else input_path.with_suffix(".md")
+    if output_mmd is None:
+        output_path = input_path.with_suffix(".mmd")
+    else:
+        output_path = output_mmd.with_suffix(".mmd")
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     bundle = load_model(model_name=model_name, device=device, cpu=cpu)
@@ -81,15 +84,15 @@ def process_image(
     return PipelineResult(
         status="ok",
         mode="image",
-        output_markdown=output_path,
-        message=f"OCR complete (image). Markdown saved to: {output_path}",
+        output_mmd=output_path,
+        message=f"OCR complete (image). MMD saved to: {output_path}",
     )
 
 
 def run_pipeline(
     *,
     input_path: Path,
-    output_md: Path | None = None,
+    output_mmd: Path | None = None,
     output_dir: Path | None = None,
     model_name: str,
     prompt: str,
@@ -106,7 +109,7 @@ def run_pipeline(
         return process_pdf(input_path)
     return process_image(
         input_path,
-        output_md=output_md,
+        output_mmd=output_mmd,
         output_dir=model_output_dir,
         model_name=model_name,
         prompt=prompt,

@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import torch
 from ocr_client.cli import build_parser
 from ocr_client.model import infer_image, load_model
 from ocr_client.pipeline import detect_input_kind, run_pipeline
@@ -38,7 +39,7 @@ class BootstrapTests(unittest.TestCase):
     @patch("pathlib.Path.write_text")
     @patch("ocr_client.pipeline.infer_image", return_value="markdown body")
     @patch("ocr_client.pipeline.load_model")
-    def test_pipeline_image_writes_default_markdown(
+    def test_pipeline_image_writes_default_mmd(
         self,
         mock_load_model: MagicMock,
         _mock_infer: MagicMock,
@@ -46,18 +47,18 @@ class BootstrapTests(unittest.TestCase):
     ) -> None:
         mock_load_model.return_value = MagicMock()
         image_path = Path("tests/fixtures/sample.png")
-        output_path = Path("tests/output/sample-output.md")
+        output_path = Path("tests/output/sample-output.mmd")
 
         result = run_pipeline(
             input_path=image_path,
-            output_md=output_path,
+            output_mmd=output_path,
             model_name="deepseek-ai/DeepSeek-OCR-2",
             prompt="<image>\n<|grounding|>Convert the document to markdown. ",
             device="cuda:0",
         )
 
         self.assertEqual(result.mode, "image")
-        self.assertEqual(result.output_markdown, output_path)
+        self.assertEqual(result.output_mmd, output_path)
         mock_write_text.assert_called_once()
 
     def test_pipeline_pdf_deferred(self) -> None:
@@ -89,6 +90,7 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(bundle.device, "cuda:0")
         _, kwargs = mock_model_loader.call_args
         self.assertEqual(kwargs["_attn_implementation"], "flash_attention_2")
+        self.assertEqual(kwargs["torch_dtype"], torch.bfloat16)
 
     def test_infer_image_raises_on_unexpected_shape(self) -> None:
         mock_model = MagicMock()

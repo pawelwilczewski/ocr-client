@@ -11,7 +11,7 @@ from ocr_client.pipeline import run_pipeline
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="ocr-client")
     parser.add_argument("input_path", help="Path to a PDF or image file.")
-    parser.add_argument("--output-md", help="Path for generated markdown output.")
+    parser.add_argument("--output-mmd", help="Path for generated Mermaid Markdown output.")
     parser.add_argument(
         "--output-dir",
         help="Directory where model-side OCR artifacts are saved.",
@@ -36,13 +36,13 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     input_path = Path(args.input_path)
-    output_md = Path(args.output_md) if args.output_md else None
+    output_mmd = Path(args.output_mmd) if args.output_mmd else None
     output_dir = Path(args.output_dir) if args.output_dir else None
 
     try:
         result = run_pipeline(
             input_path=input_path,
-            output_md=output_md,
+            output_mmd=output_mmd,
             output_dir=output_dir,
             model_name=args.model_name,
             prompt=args.prompt,

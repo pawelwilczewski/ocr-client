@@ -32,11 +32,12 @@ source ~/.bashrc
 nvcc --version
 echo $CUDA_HOME
 
-# 6) Create/sync environment (example with Python 3.13)
-uv python install 3.13
-uv sync
+# 6) Create/sync environment (Python 3.12 baseline)
+uv python install 3.12
+uv sync --python 3.12
 
-# 7) Install flash-attn (model-card baseline)
+# 7) Install flash-attn manually (outside uv sync resolution)
+uv pip install psutil
 uv pip install flash-attn==2.7.3 --no-build-isolation
 ```
 
@@ -50,10 +51,8 @@ Note:
 - Additional runtime dependencies required by DeepSeek-OCR-2 remote code:
   - `torchvision`
   - `pillow` (PIL)
-- `flash-attn==2.7.3` requires Linux with CUDA toolchain (`nvcc`, `CUDA_HOME`).
-- `pyproject.toml` includes `psutil` as an extra build dependency for `flash-attn`:
-  - `[tool.uv.extra-build-dependencies]`
-  - `flash-attn = ["psutil"]`
+- `flash-attn==2.7.3` requires Linux with CUDA toolchain (`nvcc`, `CUDA_HOME`) and may take time to build.
+- `flash-attn` is intentionally installed manually with `uv pip ... --no-build-isolation` (not via `uv sync`).
 - This chunk enforces strict `flash_attention_2` loading behavior.
 
 ## Run
@@ -73,7 +72,7 @@ Optional arguments:
 
 ```bash
 uv run ocr-client ./your-image.png \
-  --output-md ./your-image.md \
+  --output-mmd ./your-image.mmd \
   --output-dir ./ocr_output \
   --device cuda:0 \
   --base-size 1024 \
