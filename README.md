@@ -83,7 +83,7 @@ PDF examples:
 
 ```bash
 uv run ocr-client ./chapter.pdf --output-dir ./ocr_output
-uv run ocr-client ./chapter.pdf --output-dir ./ocr_output --cleanup-temp-images
+uv run ocr-client ./chapter.pdf --output-dir ./ocr_output --cleanup-temp-dir
 ```
 
 Notes for PDF:
@@ -92,6 +92,8 @@ Notes for PDF:
 - OCR appends page blocks live to one output file with `## Page N` headings.
 - If one page fails OCR, processing continues and inserts a failure marker for that page.
 - OCR images are normalized and preserved under `output-dir/images` with globally offset names.
+- Per-page intermediate OCR artifacts are preserved under `output-dir/.page_tmp` for verification.
+- Use `--cleanup-temp-dir` if you want to remove `output-dir/.page_tmp` after a run.
 - Final output is always `output-dir/result.mmd`.
 - Existing `output-dir/result.mmd` is overwritten at run start and rebuilt incrementally.
 
@@ -126,5 +128,5 @@ Run with cleanup flag:
 ```bash
 docker run --rm --gpus all \
   -v "$PWD:/work" \
-  ocr-client:latest /work/chapter.pdf --output-dir /work/ocr_output --cleanup-temp-images
+  ocr-client:latest /work/chapter.pdf --output-dir /work/ocr_output --cleanup-temp-dir
 ```

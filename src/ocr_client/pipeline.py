@@ -168,6 +168,7 @@ def process_image(
     base_size: int,
     image_size: int,
     crop_mode: bool,
+    cleanup_temp_dir: bool,
 ) -> PipelineResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = _resolve_output_mmd(output_dir)
@@ -178,26 +179,26 @@ def process_image(
     page_temp_output.mkdir(parents=True, exist_ok=True)
 
     bundle = load_model(model_name=model_name, device=device, cpu=cpu)
-    try:
-        markdown_text = infer_image(
-            bundle,
-            image_file=input_path,
-            output_path=page_temp_output,
-            prompt=prompt,
-            base_size=base_size,
-            image_size=image_size,
-            crop_mode=crop_mode,
-        )
-        page_text = _read_page_markdown(page_temp_output, markdown_text)
-        rewritten_text, next_image_index = _rewrite_and_preserve_images(
-            page_text,
-            src_root=page_temp_output,
-            dest_images_dir=images_dir,
-            next_index=0,
-        )
-        with output_path.open("w", encoding="utf-8") as out_file:
-            _append_block(out_file, page_number=None, body=rewritten_text, mode="image")
-    finally:
+    markdown_text = infer_image(
+        bundle,
+        image_file=input_path,
+        output_path=page_temp_output,
+        prompt=prompt,
+        base_size=base_size,
+        image_size=image_size,
+        crop_mode=crop_mode,
+    )
+    page_text = _read_page_markdown(page_temp_output, markdown_text)
+    rewritten_text, next_image_index = _rewrite_and_preserve_images(
+        page_text,
+        src_root=page_temp_output,
+        dest_images_dir=images_dir,
+        next_index=0,
+    )
+    with output_path.open("w", encoding="utf-8") as out_file:
+        _append_block(out_file, page_number=None, body=rewritten_text, mode="image")
+
+    if cleanup_temp_dir:
         shutil.rmtree(temp_root, ignore_errors=True)
 
     return PipelineResult(
@@ -219,14 +220,14 @@ def process_pdf(
     base_size: int,
     image_size: int,
     crop_mode: bool,
-    cleanup_temp_images: bool,
+    cleanup_temp_dir: bool,
 ) -> PipelineResult:
     output_dir.mkdir(parents=True, exist_ok=True)
     output_path = _resolve_output_mmd(output_dir)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    pages_dir = output_dir / "pages"
     images_dir = output_dir / "images"
     temp_root = output_dir / ".page_tmp"
+    pages_dir = temp_root / "pages"
 
     rendered_pages = _render_pdf_pages(input_path, pages_dir)
     bundle = load_model(model_name=model_name, device=device, cpu=cpu)
@@ -234,37 +235,35 @@ def process_pdf(
     failed_pages = 0
     next_image_index = 0
 
-    try:
-        with output_path.open("w", encoding="utf-8") as out_file:
-            for page_number, image_path in enumerate(rendered_pages, start=1):
-                page_temp_output = temp_root / f"page-{page_number:04d}"
-                page_temp_output.mkdir(parents=True, exist_ok=True)
-                try:
-                    page_text = infer_image(
-                        bundle,
-                        image_file=image_path,
-                        output_path=page_temp_output,
-                        prompt=prompt,
-                        base_size=base_size,
-                        image_size=image_size,
-                        crop_mode=crop_mode,
-                    )
-                    page_text = _read_page_markdown(page_temp_output, page_text)
-                    page_text, next_image_index = _rewrite_and_preserve_images(
-                        page_text,
-                        src_root=page_temp_output,
-                        dest_images_dir=images_dir,
-                        next_index=next_image_index,
-                    )
-                except Exception as exc:  # pragma: no cover - external inference behavior
-                    failed_pages += 1
-                    page_text = f"[OCR FAILED: {type(exc).__name__}: {exc}]"
+    with output_path.open("w", encoding="utf-8") as out_file:
+        for page_number, image_path in enumerate(rendered_pages, start=1):
+            page_temp_output = temp_root / f"page-{page_number:04d}"
+            page_temp_output.mkdir(parents=True, exist_ok=True)
+            try:
+                page_text = infer_image(
+                    bundle,
+                    image_file=image_path,
+                    output_path=page_temp_output,
+                    prompt=prompt,
+                    base_size=base_size,
+                    image_size=image_size,
+                    crop_mode=crop_mode,
+                )
+                page_text = _read_page_markdown(page_temp_output, page_text)
+                page_text, next_image_index = _rewrite_and_preserve_images(
+                    page_text,
+                    src_root=page_temp_output,
+                    dest_images_dir=images_dir,
+                    next_index=next_image_index,
+                )
+            except Exception as exc:  # pragma: no cover - external inference behavior
+                failed_pages += 1
+                page_text = f"[OCR FAILED: {type(exc).__name__}: {exc}]"
 
-                _append_block(out_file, page_number=page_number, body=page_text, mode="pdf")
-    finally:
+            _append_block(out_file, page_number=page_number, body=page_text, mode="pdf")
+
+    if cleanup_temp_dir:
         shutil.rmtree(temp_root, ignore_errors=True)
-        if cleanup_temp_images:
-            shutil.rmtree(pages_dir, ignore_errors=True)
 
     return PipelineResult(
         status="ok",
@@ -290,7 +289,7 @@ def run_pipeline(
     base_size: int = 1024,
     image_size: int = 768,
     crop_mode: bool = True,
-    cleanup_temp_images: bool = False,
+    cleanup_temp_dir: bool = False,
 ) -> PipelineResult:
     input_kind = detect_input_kind(input_path)
     model_output_dir = _require_output_dir(output_dir)
@@ -306,7 +305,7 @@ def run_pipeline(
             base_size=base_size,
             image_size=image_size,
             crop_mode=crop_mode,
-            cleanup_temp_images=cleanup_temp_images,
+            cleanup_temp_dir=cleanup_temp_dir,
         )
     return process_image(
         input_path,
@@ -318,4 +317,5 @@ def run_pipeline(
         base_size=base_size,
         image_size=image_size,
         crop_mode=crop_mode,
+        cleanup_temp_dir=cleanup_temp_dir,
     )

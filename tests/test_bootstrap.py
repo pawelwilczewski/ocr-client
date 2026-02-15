@@ -40,14 +40,14 @@ class BootstrapTests(unittest.TestCase):
                 "--device",
                 "cuda:0",
                 "--no-crop-mode",
-                "--cleanup-temp-images",
+                "--cleanup-temp-dir",
             ]
         )
         self.assertEqual(args.input_path, "tests/fixtures/sample.png")
         self.assertEqual(args.output_dir, "tests/output")
         self.assertEqual(args.device, "cuda:0")
         self.assertFalse(args.crop_mode)
-        self.assertTrue(args.cleanup_temp_images)
+        self.assertTrue(args.cleanup_temp_dir)
 
     @patch("ocr_client.pipeline.infer_image")
     @patch("ocr_client.pipeline.load_model")
@@ -207,7 +207,7 @@ class BootstrapTests(unittest.TestCase):
     @patch("ocr_client.pipeline.infer_image", return_value="only-page")
     @patch("ocr_client.pipeline._render_pdf_pages", return_value=[Path("ocr_output/pages/page-0001.png")])
     @patch("ocr_client.pipeline.load_model")
-    def test_pipeline_pdf_cleanup_temp_images(
+    def test_pipeline_pdf_cleanup_temp_dir(
         self,
         mock_load_model: MagicMock,
         _mock_render: MagicMock,
@@ -221,11 +221,11 @@ class BootstrapTests(unittest.TestCase):
             output_dir=Path("tests/output"),
             model_name="deepseek-ai/DeepSeek-OCR-2",
             prompt="<image>\n<|grounding|>Convert the document to markdown. ",
-            cleanup_temp_images=True,
+            cleanup_temp_dir=True,
         )
 
         called_dirs = [call.args[0] for call in mock_rmtree.call_args_list]
-        self.assertIn(Path("tests/output") / "pages", called_dirs)
+        self.assertIn(Path("tests/output") / ".page_tmp", called_dirs)
 
     @patch("ocr_client.pipeline._render_pdf_pages", side_effect=ValueError("bad pdf"))
     def test_pipeline_pdf_unreadable_raises(self, _mock_render: MagicMock) -> None:

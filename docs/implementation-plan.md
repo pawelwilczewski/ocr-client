@@ -55,4 +55,4 @@ Implemented as structured functions in `src/ocr_client/model.py`.
    - processing continues
    - output includes `[OCR FAILED: <error>]` for that page
 5. OCR images are copied and normalized into `output-dir/images` with globally offset names.
-6. CLI flag `--cleanup-temp-images` removes rendered page images after completion.
+6. CLI flag `--cleanup-temp-dir` removes `output-dir/.page_tmp` after completion.

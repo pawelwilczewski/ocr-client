@@ -23,9 +23,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--base-size", type=int, default=1024)
     parser.add_argument("--image-size", type=int, default=768)
     parser.add_argument(
-        "--cleanup-temp-images",
+        "--cleanup-temp-dir",
         action="store_true",
-        help="Delete rendered PDF page images after OCR completes.",
+        help="Delete output-dir/.page_tmp after OCR completes.",
     )
     parser.add_argument(
         "--crop-mode",
@@ -54,7 +54,7 @@ def main(argv: list[str] | None = None) -> int:
             base_size=args.base_size,
             image_size=args.image_size,
             crop_mode=args.crop_mode,
-            cleanup_temp_images=args.cleanup_temp_images,
+            cleanup_temp_dir=args.cleanup_temp_dir,
         )
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
         print(str(exc), file=sys.stderr)
