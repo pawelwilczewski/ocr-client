@@ -1,11 +1,11 @@
-# Implementation Plan (Updated): Image OCR Chunk
+# Implementation Plan (Updated): Image + PDF OCR Chunks
 
-## Scope in this chunk
+## Scope in this implementation
 
 1. Project package/command is `ocr_client` / `ocr-client`.
 2. Python target is `3.12` for DeepSeek integration.
 3. Image OCR is implemented end-to-end.
-4. PDF OCR is intentionally deferred.
+4. PDF OCR is implemented end-to-end via page rendering + per-page inference.
 
 ## Baseline model reference (preserved semantics)
 
@@ -38,16 +38,20 @@ Implemented as structured functions in `src/ocr_client/model.py`.
 
 ## Behavior
 
-1. `ocr-client <image>` writes markdown file by default at `<input_stem>.md`.
-2. `--output-md` overrides markdown output path.
+1. `ocr-client <image>` writes `.mmd` file by default at `<input_stem>.mmd`.
+2. `--output-mmd` overrides output path.
 3. `--output-dir` controls model artifact output directory.
 4. GPU is default (`--device cuda:0`).
 5. CPU mode is opt-in only via `--cpu`.
 6. Strict `_attn_implementation="flash_attention_2"` is enforced.
-7. PDF input currently returns: `PDF processing is scheduled for next chunk.`
 
-## Next chunk
+## PDF behavior (implemented)
 
-1. Add PDF page rendering and per-page markdown append.
-2. Add page numbering (`## Page N`) and multi-page aggregation.
-3. Add richer progress/error reporting for multi-page documents.
+1. Input PDF pages are rendered to images with `pypdfium2`.
+2. Each page is OCR'd using the existing image inference path.
+3. Output is a single `.mmd` file with page sections:
+   - `## Page 1`, `## Page 2`, ...
+4. If one page fails OCR:
+   - processing continues
+   - output includes `[OCR FAILED: <error>]` for that page
+5. CLI flag `--cleanup-temp-images` removes rendered page images after completion.

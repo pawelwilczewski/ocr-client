@@ -80,6 +80,19 @@ uv run ocr-client ./your-image.png \
   --crop-mode
 ```
 
+PDF examples:
+
+```bash
+uv run ocr-client ./chapter.pdf --output-mmd ./chapter.mmd
+uv run ocr-client ./chapter.pdf --output-dir ./ocr_output --cleanup-temp-images
+```
+
+Notes for PDF:
+
+- PDF input is internally rendered page-by-page to images via `pypdfium2`.
+- OCR appends page blocks to one output file with `## Page N` headings.
+- If one page fails OCR, processing continues and inserts a failure marker for that page.
+
 CPU mode must be explicit:
 
 ```bash
@@ -88,5 +101,4 @@ uv run ocr-client ./your-image.png --cpu
 
 ## Current limitations
 
-- PDF input is rejected with: `PDF processing is scheduled for next chunk.`
 - If CUDA or `flash-attn` is unavailable, execution fails fast with diagnostics.
