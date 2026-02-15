@@ -6,9 +6,11 @@ dependencies = [
     "addict",
     "easydict",
     "einops",
-    "tokenizers",
-    "torch",
-    "transformers",
+    "pillow",
+    "tokenizers==0.20.3",
+    "torch==2.6.0",
+    "torchvision",
+    "transformers==4.46.3",
 ]
 
 [project.scripts]
@@ -23,13 +25,3 @@ dev = ["pyrefly>=0.52.0"]
 
 [tool.uv.extra-build-dependencies]
 flash-attn = ["psutil"]
-
-[tool.uv.sources]
-torch = { index = "pytorch-cu130" }
-torchvision = { index = "pytorch-cu130" }
-torchaudio = { index = "pytorch-cu130" }
-
-[[tool.uv.index]]
-name = "pytorch-cu130"
-url = "https://download.pytorch.org/whl/cu130"
-explicit = true

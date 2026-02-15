@@ -2,46 +2,89 @@
 
 Image OCR CLI using DeepSeek-OCR-2 (PDF support is intentionally deferred to a later chunk).
 
-## Setup
+## Fresh Setup (WSL Ubuntu)
 
-Make sure you have CUDA installed: https://developer.nvidia.com/cuda-downloads.
+This is the reproducible flow from a clean WSL environment.
 
-```powershell
-uv pip install torch torchvision --index-url https://download.pytorch.org/whl/cu130
-uv python pin 3.12
+```bash
+# 1) Base packages
+sudo apt update
+sudo apt install -y curl git build-essential ninja-build wget
+
+# 2) Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source ~/.bashrc
+uv --version
+
+# 3) Add NVIDIA CUDA repo for WSL and install toolkit
+wget https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i cuda-keyring_1.1-1_all.deb
+sudo apt update
+sudo apt install -y cuda-toolkit-12-4
+
+# 4) Configure CUDA env vars
+echo 'export CUDA_HOME=/usr/local/cuda-12.4' >> ~/.bashrc
+echo 'export PATH=$CUDA_HOME/bin:$PATH' >> ~/.bashrc
+echo 'export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$LD_LIBRARY_PATH' >> ~/.bashrc
+source ~/.bashrc
+
+# 5) Verify CUDA toolchain
+nvcc --version
+echo $CUDA_HOME
+
+# 6) Create/sync environment (example with Python 3.13)
+uv python install 3.13
 uv sync
-uv pip install -U pip setuptools wheel ninja packaging psutil
-uv pip install flash-attn --no-build-isolation
+
+# 7) Install flash-attn (model-card baseline)
+uv pip install flash-attn==2.7.3 --no-build-isolation
 ```
 
 Note:
 
-- `flash-attn` requires a CUDA-capable environment with a valid CUDA toolchain (`nvcc`, `CUDA_HOME`).
-- `pyproject.toml` configures `psutil` as an extra build dependency for `flash-attn` in uv.
+- Baseline dependency versions follow the model card recommendation:
+  - `torch==2.6.0`
+  - `transformers==4.46.3`
+  - `tokenizers==0.20.3`
+  - `einops`, `addict`, `easydict`
+- Additional runtime dependencies required by DeepSeek-OCR-2 remote code:
+  - `torchvision`
+  - `pillow` (PIL)
+- `flash-attn==2.7.3` requires Linux with CUDA toolchain (`nvcc`, `CUDA_HOME`).
+- `pyproject.toml` includes `psutil` as an extra build dependency for `flash-attn`:
+  - `[tool.uv.extra-build-dependencies]`
+  - `flash-attn = ["psutil"]`
 - This chunk enforces strict `flash_attention_2` loading behavior.
 
 ## Run
 
-```powershell
-uv run ocr-client .\your-image.png
+```bash
+uv run ocr-client ./your-image.png
+```
+
+Optional CUDA checks:
+
+```bash
+uv run python -c "import torch; print(torch.__version__); print(torch.version.cuda); print(torch.cuda.is_available())"
+uv run python -c "import flash_attn; print('flash_attn ok')"
 ```
 
 Optional arguments:
 
-```powershell
-uv run ocr-client .\your-image.png `
-  --output-md .\your-image.md `
-  --output-dir .\ocr_output `
-  --device cuda:0 `
-  --base-size 1024 `
-  --image-size 768 `
+```bash
+uv run ocr-client ./your-image.png \
+  --output-md ./your-image.md \
+  --output-dir ./ocr_output \
+  --device cuda:0 \
+  --base-size 1024 \
+  --image-size 768 \
   --crop-mode
 ```
 
 CPU mode must be explicit:
 
-```powershell
-uv run ocr-client .\your-image.png --cpu
+```bash
+uv run ocr-client ./your-image.png --cpu
 ```
 
 ## Current limitations
