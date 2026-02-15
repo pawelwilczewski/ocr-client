@@ -219,3 +219,5 @@ __marimo__/
 cuda-keyring_*.deb
 
 ocr_output/
+
+tests/output/
